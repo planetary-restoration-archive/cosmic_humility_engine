@@ -1,0 +1,1537 @@
+<!DOCTYPE html>
+<!--
+  ╔════════════════════════════════════════════════════════════════════╗
+  ║  ZERO-HARM & ANTI-INVERSION NOTE                                  ║
+  ║  The Cosmic Humility Engine is an educational empowerment tool.   ║
+  ║  • No data leaves your device — ever.                             ║
+  ║  • No hidden telemetry, tracking pixels, or beacon calls.         ║
+  ║  • All state lives in IndexedDB / localStorage on your device.    ║
+  ║  • Local analytics (visit counts) are opt-in, local, resettable.  ║
+  ║  • Input is HTML-sanitized; rate limits prevent rapid abuse.       ║
+  ║  • This tool must never rank, shame, or exclude learners.         ║
+  ║  • If you adapt this: keep it empowering, never coercive.         ║
+  ╚════════════════════════════════════════════════════════════════════╝
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="The Cosmic Humility Engine — A gamified framework for cultivating planetary intelligence through science, story, and exploration.">
+<meta name="theme-color" content="#070c12">
+<title>The Cosmic Humility Engine</title>
+<style>
+/* ================================================================
+   DESIGN TOKENS — single source of truth for every visual value.
+   Add new tokens here; never hardcode colours elsewhere.
+   ================================================================ */
+:root{
+  --bg:#070c12;
+  --bg2:#0d1520;
+  --panel:#111c28;
+  --panel2:#0c1620;
+  --accent:#4dddaa;
+  --accent2:#5ea8ff;
+  --accent3:#f0a84a;
+  --danger:#e05252;
+  --text:#dce8f0;
+  --muted:#6a8499;
+  --border:#1b2d3e;
+  --border2:#253545;
+  --r:10px;        /* standard border-radius */
+  --t:.22s ease;   /* transition timing */
+  --font:"Segoe UI",system-ui,-apple-system,Ubuntu,Roboto,sans-serif;
+  --hud-w:210px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;scroll-padding-top:58px}
+body{
+  font-family:var(--font);
+  background:var(--bg);
+  color:var(--text);
+  line-height:1.72;
+  overflow-x:hidden;
+  letter-spacing:.01em;
+}
+a{color:var(--accent2);text-decoration:none}
+a:hover{text-decoration:underline}
+h1,h2,h3,h4{line-height:1.25}
+
+/* ================================================================
+   SPLASH SCREEN
+   Full-screen animated intro. Canvas handles the star-field.
+   Dismissed after 3 s or when progress bar completes.
+   ================================================================ */
+#splash{
+  position:fixed;inset:0;z-index:9000;
+  background:var(--bg);
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  transition:opacity .9s ease,visibility .9s ease;
+}
+#splash.out{opacity:0;visibility:hidden;pointer-events:none}
+#splash-canvas{position:absolute;inset:0;width:100%;height:100%}
+.sp-wrap{position:relative;z-index:2;text-align:center;padding:20px}
+.sp-title{
+  font-size:clamp(2rem,5vw,3.4rem);
+  color:var(--accent);
+  letter-spacing:.06em;
+  opacity:0;transform:translateY(22px);
+  transition:opacity 1.1s ease .4s,transform 1.1s ease .4s;
+}
+.sp-title.on{opacity:1;transform:translateY(0)}
+.sp-sub{
+  font-size:.95rem;color:var(--muted);
+  margin-top:10px;opacity:0;
+  transition:opacity 1s ease 1s;
+}
+.sp-sub.on{opacity:1}
+.sp-prog{
+  width:180px;height:2px;
+  background:var(--border);
+  margin:28px auto 0;border-radius:2px;overflow:hidden;
+}
+.sp-bar{height:100%;background:var(--accent);width:0;transition:width .08s linear}
+
+/* ================================================================
+   STICKY NAVIGATION
+   Scroll-spy highlights active section link.
+   Contains mode toggle, search trigger, and HUD toggle.
+   ================================================================ */
+#nav{
+  position:sticky;top:0;z-index:500;
+  background:rgba(7,12,18,.94);
+  backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--border);
+  padding:0 16px;
+  display:flex;align-items:center;gap:6px;flex-wrap:wrap;
+  min-height:52px;
+}
+.nav-logo{
+  font-size:.78rem;font-weight:800;
+  color:var(--accent);letter-spacing:.12em;
+  white-space:nowrap;margin-right:4px;
+}
+.nav-links{display:flex;flex-wrap:wrap;gap:2px;flex:1;min-width:0}
+.nav-links a{
+  font-size:.75rem;color:var(--muted);
+  padding:5px 9px;border-radius:6px;
+  transition:background var(--t),color var(--t);
+  white-space:nowrap;
+}
+.nav-links a:hover,.nav-links a.active{
+  background:var(--panel);color:var(--accent);text-decoration:none;
+}
+.nbtn{
+  background:var(--panel);border:1px solid var(--border);
+  color:var(--text);padding:5px 11px;border-radius:6px;
+  cursor:pointer;font-size:.76rem;font-family:var(--font);
+  transition:background var(--t);white-space:nowrap;
+}
+.nbtn:hover{background:var(--border2)}
+.nbtn.lit{background:var(--accent);color:#000;border-color:var(--accent);font-weight:700}
+
+/* ================================================================
+   HUD — fixed overlay, top-right
+   Meters update via updateHUD() after every state mutation.
+   Hidden on small screens; toggled via nav button.
+   ================================================================ */
+#hud{
+  position:fixed;top:62px;right:14px;
+  width:var(--hud-w);
+  background:rgba(13,21,32,.93);
+  backdrop-filter:blur(10px);
+  border:1px solid var(--border2);border-radius:var(--r);
+  padding:13px;z-index:400;font-size:.76rem;
+  transition:transform var(--t);
+}
+#hud.hidden{transform:translateX(calc(var(--hud-w) + 22px))}
+.hud-head{
+  display:flex;justify-content:space-between;align-items:center;
+  margin-bottom:9px;color:var(--accent);
+  font-weight:800;font-size:.66rem;letter-spacing:.14em;text-transform:uppercase;
+}
+#hud-tgl{background:none;border:none;color:var(--muted);cursor:pointer;padding:0 2px;font-size:.85rem}
+.hud-name{color:var(--text);font-size:.84rem;font-weight:600}
+.hud-role{color:var(--muted);font-size:.7rem;margin-top:2px;margin-bottom:9px}
+.hud-m{margin-bottom:7px}
+.hud-m>label{
+  display:flex;justify-content:space-between;
+  color:var(--muted);font-size:.7rem;margin-bottom:3px;
+}
+.mbar{height:5px;background:var(--bg);border-radius:3px;overflow:hidden}
+.mfill{height:100%;border-radius:3px;transition:width .65s ease}
+.fh{background:var(--accent)}
+.fs{background:var(--accent2)}
+.fp{background:var(--accent3)}
+.hud-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:9px}
+.hud-cnt{
+  background:var(--bg2);border-radius:6px;
+  padding:7px 5px;text-align:center;
+}
+.hud-cnt .v{font-size:1.15rem;font-weight:800;color:var(--accent)}
+.hud-cnt .l{font-size:.62rem;color:var(--muted);margin-top:1px}
+
+/* ================================================================
+   CONSTELLATION CANVAS — fixed, bottom-right
+   Draws Earth-system nodes; humanity node drifts from
+   centre to periphery as STATE.humility climbs (0→100).
+   ================================================================ */
+#cst{
+  position:fixed;bottom:18px;right:14px;
+  width:172px;height:172px;
+  background:rgba(7,12,18,.88);
+  backdrop-filter:blur(6px);
+  border:1px solid var(--border);border-radius:var(--r);
+  z-index:400;overflow:hidden;
+}
+#cst-canvas{width:100%;height:100%}
+.cst-lbl{
+  position:absolute;bottom:5px;left:0;right:0;
+  text-align:center;font-size:.58rem;color:var(--muted);
+  letter-spacing:.06em;pointer-events:none;
+}
+
+/* ================================================================
+   PAGE HEADER — parallax glow hero
+   ================================================================ */
+#hero{
+  text-align:center;padding:90px 20px 70px;
+  position:relative;overflow:hidden;
+}
+.hero-glow{
+  position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(ellipse at 50% 0%,rgba(77,221,170,.09) 0%,transparent 68%);
+}
+#hero h1{
+  font-size:clamp(2rem,4vw,3.1rem);color:var(--accent);
+  position:relative;z-index:1;letter-spacing:-.01em;
+}
+#hero .tagline{
+  color:var(--muted);max-width:720px;
+  margin:14px auto 0;font-size:1rem;
+  position:relative;z-index:1;
+}
+
+/* ================================================================
+   MAIN LAYOUT
+   ================================================================ */
+main{max-width:960px;margin:0 auto;padding:0 18px 90px}
+
+/* ================================================================
+   PARALLAX SECTIONS
+   CSS background-attachment:fixed provides depth on scroll.
+   Each section has a unique gradient colour identity.
+   ================================================================ */
+.ps{position:relative;margin-bottom:64px}
+.pbg{
+  position:absolute;inset:0;border-radius:var(--r);
+  pointer-events:none;background-attachment:fixed;
+  background-size:cover;z-index:0;
+}
+.pbg-1{background-image:radial-gradient(ellipse at 25% 60%,rgba(77,221,170,.055) 0%,transparent 58%)}
+.pbg-2{background-image:radial-gradient(ellipse at 75% 50%,rgba(94,168,255,.06) 0%,transparent 58%)}
+.pbg-3{background-image:radial-gradient(ellipse at 50% 30%,rgba(240,168,74,.055) 0%,transparent 58%)}
+.pbg-4{background-image:radial-gradient(ellipse at 20% 70%,rgba(150,210,100,.05) 0%,transparent 58%)}
+.si{position:relative;z-index:1}
+
+/* ================================================================
+   SECTION HEADERS (collapsible trigger)
+   ================================================================ */
+.sh{
+  display:flex;align-items:center;gap:13px;
+  padding:22px 0 14px;cursor:pointer;user-select:none;
+}
+.sh:hover h2{color:var(--accent2)}
+.s-ico{font-size:1.7rem;min-width:38px;text-align:center}
+.sh h2{
+  font-size:clamp(1.25rem,2.4vw,1.65rem);
+  color:var(--accent);flex:1;
+  transition:color var(--t);
+}
+.coll-btn{
+  background:none;border:none;color:var(--muted);
+  font-size:1.1rem;cursor:pointer;
+  transition:transform var(--t),color var(--t);
+  padding:4px 7px;
+}
+.coll-btn.open{transform:rotate(180deg)}
+.coll-btn:hover{color:var(--accent)}
+.cb{
+  overflow:hidden;
+  max-height:4000px;opacity:1;
+  transition:max-height .52s cubic-bezier(.4,0,.2,1),opacity .4s ease;
+}
+.cb.collapsed{max-height:0;opacity:0}
+
+/* ================================================================
+   PANELS
+   ================================================================ */
+.panel{
+  background:var(--panel);border:1px solid var(--border);
+  border-radius:var(--r);padding:26px;margin-bottom:14px;
+}
+.panel h3{color:var(--accent2);margin:18px 0 9px;font-size:1rem}
+.panel h3:first-child{margin-top:0}
+.panel p{margin-bottom:10px}
+.panel ul{margin-left:20px}
+.panel ul li{margin-bottom:5px}
+
+/* ================================================================
+   CARDS GRID
+   ================================================================ */
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:13px;margin-top:13px}
+.card{
+  background:var(--panel2);border:1px solid var(--border);
+  border-radius:9px;padding:17px;
+  transition:border-color var(--t),transform var(--t);
+}
+.card:hover{border-color:var(--accent2);transform:translateY(-2px)}
+.card h4{color:var(--accent2);margin-bottom:7px}
+.card p{font-size:.86rem;color:var(--muted)}
+.card .ico{font-size:1.55rem;margin-bottom:9px}
+
+/* ================================================================
+   SCENARIO DECISION ENGINE
+   Each scenario card holds the decision prompt plus
+   choice buttons that call applyDecision(id, idx).
+   Completed cards are locked and show outcome pills.
+   ================================================================ */
+.sc-card{
+  background:var(--panel2);border:1px solid var(--border2);
+  border-radius:var(--r);padding:20px;margin-bottom:16px;
+  transition:border-color var(--t);
+}
+.sc-card.done{border-color:var(--accent);opacity:.82}
+.sc-tag{font-size:.68rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--accent3);margin-bottom:9px}
+.sc-title{font-size:1.02rem;color:var(--text);font-weight:700;margin-bottom:8px}
+.sc-desc{font-size:.86rem;color:var(--muted);margin-bottom:14px;line-height:1.62}
+.ch-btn{
+  display:block;width:100%;
+  background:var(--bg2);border:1px solid var(--border);
+  border-radius:8px;padding:11px 13px;
+  color:var(--text);text-align:left;cursor:pointer;
+  margin-bottom:7px;font-size:.86rem;line-height:1.5;
+  font-family:var(--font);
+  transition:border-color var(--t),background var(--t);
+}
+.ch-btn:hover{border-color:var(--accent2);background:var(--panel)}
+.ch-btn:disabled{opacity:.5;cursor:default}
+.ch-btn.chosen{border-color:var(--accent);background:rgba(77,221,170,.08)}
+.ch-btn.chosen::after{content:" ✓";color:var(--accent)}
+.sc-result{
+  margin-top:11px;padding:12px 14px;
+  background:rgba(77,221,170,.06);
+  border:1px solid rgba(77,221,170,.18);
+  border-radius:8px;font-size:.84rem;
+  display:none;
+}
+.sc-result.on{display:block}
+.pills{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
+.pill{font-size:.7rem;padding:3px 8px;border-radius:20px;font-weight:700}
+.pp{background:rgba(77,221,170,.14);color:var(--accent)}
+.pn{background:rgba(224,82,82,.14);color:var(--danger)}
+.pu{background:rgba(94,168,255,.14);color:var(--accent2)}
+
+/* ================================================================
+   POLICY LENS MODE
+   Toggle .policy-mode on body to reveal governance callouts.
+   ================================================================ */
+.pol{display:none}
+body.pm .pol{display:block}
+body.pm .exp{display:none}
+.pol-box{
+  background:rgba(240,168,74,.07);
+  border:1px solid rgba(240,168,74,.22);
+  border-radius:8px;padding:13px 15px;margin-top:13px;
+}
+.pol-box h4{font-size:.83rem;color:var(--accent3);margin-bottom:5px;font-weight:800}
+.pol-box p{font-size:.83rem;color:var(--muted)}
+
+/* ================================================================
+   TIMELINE
+   ================================================================ */
+.tl{position:relative;margin-top:18px}
+.tl::before{
+  content:'';position:absolute;
+  left:18px;top:0;bottom:0;
+  width:2px;background:var(--border);
+}
+.tl-item{position:relative;padding:0 0 26px 52px}
+.tl-dot{
+  position:absolute;left:11px;top:5px;
+  width:15px;height:15px;
+  background:var(--accent);border-radius:50%;
+  border:2px solid var(--bg);
+}
+.tl-yr{font-size:.72rem;color:var(--accent3);font-weight:800;margin-bottom:3px}
+.tl-t{font-size:.97rem;color:var(--text);font-weight:700;margin-bottom:3px}
+.tl-d{font-size:.84rem;color:var(--muted)}
+
+/* ================================================================
+   MILESTONES
+   ================================================================ */
+.mstones{display:flex;flex-direction:column;gap:9px;margin-top:14px}
+.ms{
+  display:flex;align-items:center;gap:13px;
+  background:var(--panel2);border:1px solid var(--border);
+  border-radius:8px;padding:11px 14px;
+  opacity:.35;transition:opacity var(--t),border-color var(--t);
+}
+.ms.on{opacity:1;border-color:var(--accent)}
+.ms .mi{font-size:1.45rem;min-width:34px;text-align:center}
+.ms h4{font-size:.88rem;color:var(--text)}
+.ms p{font-size:.76rem;color:var(--muted);margin-top:2px}
+
+/* ================================================================
+   FORM ELEMENTS
+   ================================================================ */
+.fg{margin-bottom:14px}
+.fg label{display:block;font-size:.83rem;color:var(--muted);margin-bottom:5px}
+input,select{
+  background:var(--bg2);border:1px solid var(--border);
+  padding:9px 12px;color:var(--text);border-radius:8px;
+  font-family:var(--font);font-size:.88rem;width:100%;
+  transition:border-color var(--t);
+}
+input:focus,select:focus{outline:none;border-color:var(--accent2)}
+select option{background:var(--bg2)}
+.btn{
+  padding:9px 19px;border:none;border-radius:8px;
+  cursor:pointer;font-size:.88rem;font-family:var(--font);
+  transition:opacity var(--t),transform var(--t);
+}
+.btn:hover{opacity:.85;transform:translateY(-1px)}
+.bp{background:var(--accent);color:#000;font-weight:700}
+.bs{background:var(--panel);border:1px solid var(--border);color:var(--text)}
+.bd{background:var(--danger);color:#fff}
+.story-out{
+  margin-top:18px;padding:18px 20px;
+  background:var(--bg2);
+  border-left:3px solid var(--accent);
+  border-radius:0 8px 8px 0;
+  font-size:.9rem;line-height:1.82;white-space:pre-line;
+  display:none;
+}
+.story-out.on{display:block}
+
+/* ================================================================
+   TOOLTIPS — data-tip attribute pattern
+   ================================================================ */
+[data-tip]{position:relative}
+[data-tip]::after{
+  content:attr(data-tip);
+  position:absolute;bottom:calc(100% + 7px);left:50%;
+  transform:translateX(-50%);
+  background:var(--panel);border:1px solid var(--border2);
+  color:var(--text);font-size:.73rem;line-height:1.4;
+  padding:6px 10px;border-radius:6px;
+  width:max-content;max-width:210px;
+  white-space:normal;text-align:left;
+  pointer-events:none;opacity:0;
+  transition:opacity .18s ease;z-index:999;
+}
+[data-tip]:hover::after{opacity:1}
+
+/* ================================================================
+   SEARCH OVERLAY
+   ================================================================ */
+#srch{
+  position:fixed;inset:0;z-index:800;
+  background:rgba(4,8,14,.93);
+  backdrop-filter:blur(12px);
+  display:none;flex-direction:column;
+  align-items:center;padding-top:110px;
+}
+#srch.on{display:flex}
+#srch-in{
+  width:min(580px,90vw);font-size:1.15rem;
+  padding:13px 16px;background:var(--panel);
+  border:1px solid var(--accent2);border-radius:11px;
+  color:var(--text);
+}
+#srch-res{
+  width:min(580px,90vw);margin-top:14px;
+  max-height:58vh;overflow-y:auto;
+}
+.sr{
+  background:var(--panel);border:1px solid var(--border);
+  border-radius:8px;padding:13px 15px;
+  margin-bottom:7px;cursor:pointer;
+  transition:border-color var(--t);
+}
+.sr:hover{border-color:var(--accent)}
+.sr h4{font-size:.88rem;color:var(--accent2);margin-bottom:3px}
+.sr p{font-size:.8rem;color:var(--muted)}
+mark{background:rgba(77,221,170,.22);color:var(--accent);border-radius:2px;padding:0 2px}
+
+/* ================================================================
+   TOASTS
+   ================================================================ */
+#toasts{
+  position:fixed;bottom:210px;right:14px;
+  z-index:600;display:flex;flex-direction:column;gap:7px;
+  pointer-events:none;
+}
+.toast{
+  background:var(--panel2);border:1px solid var(--accent);
+  border-radius:8px;padding:9px 13px;font-size:.8rem;
+  color:var(--text);max-width:210px;
+  animation:tin .3s ease,tout .4s ease 2.6s forwards;
+}
+@keyframes tin{from{opacity:0;transform:translateX(28px)}to{opacity:1;transform:translateX(0)}}
+@keyframes tout{to{opacity:0;transform:translateX(28px)}}
+
+/* ================================================================
+   FOOTER
+   ================================================================ */
+footer{
+  background:var(--panel);border-top:1px solid var(--border);
+  padding:38px 20px;text-align:center;
+  color:var(--muted);font-size:.83rem;
+}
+.zh-box{
+  max-width:680px;margin:0 auto 20px;
+  padding:15px 18px;
+  background:rgba(77,221,170,.05);
+  border:1px solid rgba(77,221,170,.13);
+  border-radius:8px;font-size:.8rem;line-height:1.62;
+}
+.zh-box strong{color:var(--accent)}
+.attr-grid{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));
+  gap:11px;max-width:760px;margin:18px auto;text-align:left;
+}
+.attr-item h5{color:var(--text);font-size:.8rem;margin-bottom:3px}
+.attr-item p{font-size:.73rem;color:var(--muted)}
+
+/* ================================================================
+   ANIMATIONS
+   ================================================================ */
+@keyframes fadeUp{from{opacity:0;transform:translateY(26px)}to{opacity:1;transform:translateY(0)}}
+
+/* ================================================================
+   PRINT STYLESHEET
+   Strips interactive chrome; reveals all collapsed sections.
+   ================================================================ */
+@media print{
+  body{background:#fff;color:#111;font-size:11pt}
+  #splash,#hud,#nav,#cst,#toasts,#srch,
+  .nbtn,.coll-btn,.ch-btn,.btn{display:none!important}
+  .cb.collapsed{max-height:none!important;opacity:1!important}
+  .panel{border:1px solid #ccc;background:#f9f9f9;break-inside:avoid}
+  .pbg{display:none}
+  h2{color:#1a6b4a}h3{color:#2b5ca0}
+  footer{border-top:1px solid #ccc;color:#555}
+  a::after{content:" ("attr(href)")";font-size:9pt;color:#777}
+  @page{margin:20mm}
+}
+
+/* ================================================================
+   RESPONSIVE
+   ================================================================ */
+@media(max-width:768px){
+  #hud,#cst{display:none}
+  .nav-links a{font-size:.7rem;padding:4px 7px}
+}
+@media(max-width:480px){
+  main{padding:0 10px 60px}
+  .panel{padding:15px}
+}
+</style>
+</head>
+<body>
+
+<!-- NOSCRIPT: complete content available, JS features flagged -->
+<noscript>
+<style>
+  #splash{display:none}
+  .cb{max-height:none!important;opacity:1!important}
+  #hud,#cst,#toasts{display:none}
+  main{max-width:940px;margin:0 auto;padding:20px}
+</style>
+<div style="background:#111c28;color:#dce8f0;padding:14px 22px;font-size:.85rem;border-bottom:1px solid #1b2d3e">
+  ⚠️ <strong>JavaScript is disabled.</strong> Core educational content is fully readable. Interactive features (HUD, decisions, search, story generator) require JavaScript.
+</div>
+</noscript>
+
+<!-- SPLASH -->
+<div id="splash" role="presentation" aria-hidden="true">
+  <canvas id="splash-canvas"></canvas>
+  <div class="sp-wrap">
+    <h1 class="sp-title">The Cosmic Humility Engine</h1>
+    <p class="sp-sub">Cultivating planetary intelligence · Science · Story · Exploration</p>
+    <div class="sp-prog"><div class="sp-bar" id="sp-bar"></div></div>
+  </div>
+</div>
+
+<!-- STICKY NAV -->
+<nav id="nav" aria-label="Main navigation">
+  <span class="nav-logo">☿ CHE</span>
+  <div class="nav-links" role="menubar">
+    <a href="#principles" role="menuitem">Principles</a>
+    <a href="#council" role="menuitem">Council</a>
+    <a href="#timeline" role="menuitem">Timeline</a>
+    <a href="#research" role="menuitem">Research</a>
+    <a href="#decisions" role="menuitem">Decisions</a>
+    <a href="#roles" role="menuitem">Roles</a>
+    <a href="#milestones" role="menuitem">Milestones</a>
+    <a href="#journey" role="menuitem">Journey</a>
+  </div>
+  <button class="nbtn" id="mode-btn" data-tip="Toggle student vs. policy-maker perspective" onclick="toggleMode()">🎓 Explorer</button>
+  <button class="nbtn" data-tip="Full-text search (Ctrl+K)" onclick="openSearch()">🔍</button>
+  <button class="nbtn" data-tip="Show/hide player HUD" onclick="toggleHUD()">📊</button>
+</nav>
+
+<!-- HUD -->
+<aside id="hud" role="complementary" aria-label="Player status">
+  <div class="hud-head">
+    <span>⬡ STATUS</span>
+    <button id="hud-tgl" onclick="toggleHUD()" aria-label="Collapse HUD">◀</button>
+  </div>
+  <div class="hud-name" id="hud-name">Explorer</div>
+  <div class="hud-role" id="hud-role">Unassigned</div>
+  <div class="hud-m" data-tip="Tracks how far your thinking has shifted from human-centred to systems-aware">
+    <label><span>Humility</span><span id="h-val">0%</span></label>
+    <div class="mbar"><div class="mfill fh" id="h-bar" style="width:0%"></div></div>
+  </div>
+  <div class="hud-m" data-tip="Reflects overall Earth-system health shaped by your decisions">
+    <label><span>Stability</span><span id="s-val">70%</span></label>
+    <div class="mbar"><div class="mfill fs" id="s-bar" style="width:70%"></div></div>
+  </div>
+  <div class="hud-m" data-tip="Composite journey completion (sections visited + decisions made)">
+    <label><span>Progress</span><span id="p-val">0%</span></label>
+    <div class="mbar"><div class="mfill fp" id="p-bar" style="width:0%"></div></div>
+  </div>
+  <div class="hud-grid">
+    <div class="hud-cnt" data-tip="Council scenarios completed"><div class="v" id="h-dec">0</div><div class="l">Decisions</div></div>
+    <div class="hud-cnt" data-tip="Milestones unlocked"><div class="v" id="h-ms">0</div><div class="l">Milestones</div></div>
+  </div>
+</aside>
+
+<!-- CONSTELLATION PANEL -->
+<div id="cst" role="img" aria-label="Earth systems constellation — responds to your journey state">
+  <canvas id="cst-canvas" width="172" height="172"></canvas>
+  <div class="cst-lbl">Earth Systems</div>
+</div>
+
+<!-- TOASTS -->
+<div id="toasts" aria-live="polite"></div>
+
+<!-- SEARCH OVERLAY -->
+<div id="srch" role="dialog" aria-modal="true" aria-label="Content search">
+  <input type="search" id="srch-in" placeholder="Search concepts, scenarios, science…" autocomplete="off" maxlength="100" aria-label="Search">
+  <div id="srch-res" role="list"></div>
+  <p style="color:var(--muted);font-size:.78rem;margin-top:10px">Press Esc to close</p>
+</div>
+
+<!-- PAGE HEADER -->
+<header id="hero">
+  <div class="hero-glow"></div>
+  <h1>The Cosmic Humility Engine</h1>
+  <p class="tagline">A gamified framework designed to dismantle human superiority narratives and cultivate planetary intelligence through science, story, and lived decision-making.</p>
+</header>
+
+<main id="main-content">
+
+  <!-- ── SECTION 1: FIRST PRINCIPLES ─────────────────────────── -->
+  <section id="principles" class="ps" data-s="principles">
+    <div class="pbg pbg-1"></div>
+    <div class="si">
+      <div class="sh" onclick="toggleS('pr-b')">
+        <span class="s-ico">🌐</span>
+        <h2>1. First Principles</h2>
+        <button class="coll-btn open" id="btn-pr-b" aria-expanded="true" aria-label="Collapse">▼</button>
+      </div>
+      <div class="cb" id="pr-b">
+        <div class="panel">
+          <p>Anthropocentrism — the belief that humans occupy the central or most important position in existence — is not merely a philosophical posture. It is a deeply embedded cognitive default that has shaped economics, law, religion, and policy for millennia. Recognising it as a bias, rather than a fact, is the first step of this journey.</p>
+          <h3>The Core Reframe</h3>
+          <p>Humans are not masters of Earth systems. We are participants inside a complex, self-regulating biosphere that predates us by approximately 3.5 billion years. Our civilisations are guests of ecological stability — not its architects.</p>
+          <h3>Five Foundational Truths</h3>
+          <div class="grid">
+            <div class="card"><div class="ico">⏳</div><h4>Deep Time Priority</h4><p>Planetary systems predate humanity by billions of years and will long outlast us. We are a very recent development.</p></div>
+            <div class="card"><div class="ico">🕸️</div><h4>Network Independence</h4><p>Ecological networks self-organise independently of human intent or permission — they do not require our oversight.</p></div>
+            <div class="card"><div class="ico">🧬</div><h4>Species Interdependence</h4><p>No species exists in isolation. Every organism depends on webs of others; Homo sapiens is no exception.</p></div>
+            <div class="card"><div class="ico">🏛️</div><h4>Civilisation Dependency</h4><p>Human civilisations survive only while ecosystems maintain the conditions they require. Stability is borrowed, not owned.</p></div>
+            <div class="card"><div class="ico">🌀</div><h4>Emergent Complexity</h4><p>The biosphere exhibits intelligence-like behaviour through emergent, decentralised coordination that no single organism controls.</p></div>
+          </div>
+          <div class="pol pol-box">
+            <h4>🏛️ Policy Lens</h4>
+            <p>Most policy frameworks treat ecosystems as resources serving human interests. Reframing them as foundational infrastructure — systems upon which all human productivity depends — transforms the calculus of environmental regulation from "cost" to "essential maintenance of civilisational prerequisites."</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── SECTION 2: THE COUNCIL ───────────────────────────────── -->
+  <section id="council" class="ps" data-s="council">
+    <div class="pbg pbg-2"></div>
+    <div class="si">
+      <div class="sh" onclick="toggleS('co-b')">
+        <span class="s-ico">📖</span>
+        <h2>2. The Council of Earth Systems</h2>
+        <button class="coll-btn open" id="btn-co-b" aria-expanded="true">▼</button>
+      </div>
+      <div class="cb" id="co-b">
+        <div class="panel">
+          <p>The narrative core of this framework imagines that Earth has always been governed by non-human intelligence systems operating in quiet coordination — long before the first hominid stood upright. Humanity, clever and recently arrived, is simply the newest participant seeking admission to a very old council.</p>
+          <p>This is not metaphor. The systems below are real, scientifically documented, and functionally interdependent. The "council" is a cognitive device for taking them seriously as agents rather than resources.</p>
+          <h3>Council Members</h3>
+          <div class="grid">
+            <div class="card" data-tip="Mycorrhizal networks distribute nutrients and stress signals across entire forests. A single birch can share carbon with a seedling 20m away.">
+              <div class="ico">🌲</div><h4>The Forest Intelligence</h4>
+              <p class="exp">Fungal networks and tree communication systems that redistribute nutrients and coordinate forest-wide responses to stress or disease.</p>
+              <p class="pol">Policy frame: Forests as distributed sensing and carbon infrastructure. Legal personhood proposals (Ecuador, New Zealand) emerging.</p>
+            </div>
+            <div class="card" data-tip="Ocean currents move planetary heat; plankton produce ~50% of Earth's oxygen. The ocean has absorbed ~90% of anthropogenic warming since 1970.">
+              <div class="ico">🌊</div><h4>The Ocean Regulator</h4>
+              <p class="exp">Ocean currents, plankton oxygen production, and carbon absorption systems that stabilise global climate across centuries.</p>
+              <p class="pol">Policy frame: The ocean as unpriced global commons. High-seas treaties and blue carbon markets are nascent governance responses.</p>
+            </div>
+            <div class="card" data-tip="The atmosphere took 2.4 billion years to become oxygen-rich. It is maintained by the collective metabolism of all living things — a shared commons.">
+              <div class="ico">🌬️</div><h4>The Atmospheric Architect</h4>
+              <p class="exp">Planetary temperature balance, circulation patterns, and the greenhouse layer that makes liquid water — and life — possible.</p>
+              <p class="pol">Policy frame: The Paris Agreement represents humanity's first formal acknowledgement of atmospheric limits as a binding constraint on economic activity.</p>
+            </div>
+            <div class="card" data-tip="Geological processes cycle phosphorus, calcium, and iron over millions of years. Without plate tectonics, Earth's surface would be sterile ocean.">
+              <div class="ico">⛰️</div><h4>The Geological Memory</h4>
+              <p class="exp">Tectonic cycles, volcanic mineral flows, and deep-time processes that create fertile soils and regulate ocean chemistry.</p>
+              <p class="pol">Policy frame: Mining governance rarely accounts for geological timescales. Deep-time thinking is absent from most environmental impact frameworks.</p>
+            </div>
+            <div class="card" data-tip="Humanity's capacity for language, cumulative knowledge, and technological transformation is genuinely remarkable — but it has only existed for ~300,000 years.">
+              <div class="ico">🧠</div><h4>The Human Witness</h4>
+              <p class="exp">The newest participant: a species with extraordinary cognitive range, seeking to understand its place within systems far older and larger than itself.</p>
+              <p class="pol">Policy frame: The Anthropocene concept formalises humanity's geological agency — and with it, the responsibility to govern that agency deliberately.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── SECTION 3: HUMILITY TIMELINE ────────────────────────── -->
+  <section id="timeline" class="ps" data-s="timeline">
+    <div class="pbg pbg-3"></div>
+    <div class="si">
+      <div class="sh" onclick="toggleS('tl-b')">
+        <span class="s-ico">⏱️</span>
+        <h2>3. The Humility Timeline</h2>
+        <button class="coll-btn open" id="btn-tl-b" aria-expanded="true">▼</button>
+      </div>
+      <div class="cb" id="tl-b">
+        <div class="panel">
+          <p>Each major scientific revolution has, without exception, displaced humanity further from the centre of reality. This pattern is not coincidental — it reflects the progressive maturation of our collective intelligence. The displacements were resisted, sometimes violently. They were also always correct.</p>
+          <div class="tl">
+            <div class="tl-item"><div class="tl-dot"></div>
+              <div class="tl-yr">1543</div>
+              <div class="tl-t">Copernican Revolution</div>
+              <div class="tl-d">Copernicus demonstrated that Earth orbits the Sun. For the first time, humanity ceased to be the literal centre of the known universe. The Church resisted for 130 years.</div>
+            </div>
+            <div class="tl-item"><div class="tl-dot"></div>
+              <div class="tl-yr">1859</div>
+              <div class="tl-t">Darwinian Evolution</div>
+              <div class="tl-d">Darwin showed that humans evolved from earlier life forms through natural selection — not separately created, but continuous with all other life. A direct line from amoeba to us.</div>
+            </div>
+            <div class="tl-item"><div class="tl-dot"></div>
+              <div class="tl-yr">1920s–50s</div>
+              <div class="tl-t">Ecological Science Emerges</div>
+              <div class="tl-d">Ecologists revealed that species exist within dynamic systems of mutual dependence. No organism is meaningfully separate from its environment — including the human one.</div>
+            </div>
+            <div class="tl-item"><div class="tl-dot"></div>
+              <div class="tl-yr">1972</div>
+              <div class="tl-t">The Gaia Hypothesis</div>
+              <div class="tl-d">James Lovelock proposed that Earth's biosphere actively regulates conditions for life — that life is itself an Earth-scale self-organising system, not merely an occupant of a passive planet.</div>
+            </div>
+            <div class="tl-item"><div class="tl-dot"></div>
+              <div class="tl-yr">1980s–2000s</div>
+              <div class="tl-t">Complexity Science & Distributed Intelligence</div>
+              <div class="tl-d">Complexity research revealed that intelligence, coordination, and problem-solving are not uniquely human phenomena. They emerge in any sufficiently complex network — slime moulds, ant colonies, markets, forests.</div>
+            </div>
+            <div class="tl-item"><div class="tl-dot"></div>
+              <div class="tl-yr">Now</div>
+              <div class="tl-t">The Anthropocene Recognition</div>
+              <div class="tl-d">For the first time, humanity recognises its own geological impact — and faces the choice of whether to exercise that impact destructively or as a conscious participant in planetary systems.</div>
+            </div>
+          </div>
+          <div class="pol pol-box">
+            <h4>🏛️ Policy Lens</h4>
+            <p>The Anthropocene framing has entered international policy discourse through the IPCC, CBD, and IPBES. Understanding its intellectual lineage equips practitioners to communicate the urgency of planetary stewardship in historically grounded, non-alarmist terms that resonate across political cultures.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── SECTION 4: RESEARCH ──────────────────────────────────── -->
+  <section id="research" class="ps" data-s="research">
+    <div class="pbg pbg-4"></div>
+    <div class="si">
+      <div class="sh" onclick="toggleS('re-b')">
+        <span class="s-ico">🔬</span>
+        <h2>4. Modern Scientific Insights</h2>
+        <button class="coll-btn open" id="btn-re-b" aria-expanded="true">▼</button>
+      </div>
+      <div class="cb" id="re-b">
+        <div class="panel">
+          <h3>The Wood Wide Web</h3>
+          <p>Research by ecologist Suzanne Simard and collaborators has revealed that forest trees communicate and exchange nutrients through underground mycorrhizal fungal networks. Older "mother trees" actively share carbon with struggling saplings across species boundaries. A single hectare of forest floor may contain hundreds of kilometres of fungal threads. The forest is not a collection of competing individuals; it is a distributed community.</p>
+
+          <h3>Ocean Intelligence at Scale</h3>
+          <p>Marine phytoplankton, constituting less than 1% of global photosynthetic biomass, produce approximately 50% of all oxygen in Earth's atmosphere and absorb nearly a third of human carbon emissions annually. This is accomplished through entirely decentralised, emergent coordination — no central controller, no plan, only chemical signalling propagating across the largest habitat on Earth.</p>
+
+          <h3>Distributed Cognition Without a Brain</h3>
+          <p>Physarum polycephalum — a single-celled slime mould with no nervous system — can solve shortest-path problems. When presented with nutrient arrangements identical to Tokyo's geography, it independently designs a network structurally equivalent to the Tokyo railway system, optimised for resilience and efficiency. Problem-solving is not exclusively a neural phenomenon.</p>
+
+          <h3>The Invisible Foundation Beneath Our Feet</h3>
+          <p>A single gram of healthy soil contains approximately one billion bacteria representing tens of thousands of species. This microbial community drives nutrient cycling, carbon sequestration, and disease suppression for all terrestrial food production. Modern industrial agriculture has degraded 40% of global topsoil since 1945, systematically undermining the biological infrastructure that feeds eight billion people.</p>
+
+          <div class="pol pol-box">
+            <h4>🏛️ Policy Lens</h4>
+            <p>Ecosystem services — the free work performed by natural systems including water filtration, pollination, and carbon sequestration — are estimated by the TEEB framework at USD 125–145 trillion annually, approximately 1.5× global GDP. These services are unpriced in most regulatory frameworks, creating systematic underinvestment in their maintenance. Natural capital accounting proposals (UK, New Zealand, Canada) are early attempts to correct this.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── SECTION 5: DECISION ENGINE ──────────────────────────── -->
+  <section id="decisions" class="ps" data-s="decisions">
+    <div class="pbg pbg-1"></div>
+    <div class="si">
+      <div class="sh" onclick="toggleS('de-b')">
+        <span class="s-ico">⚖️</span>
+        <h2>5. The Council Decisions</h2>
+        <button class="coll-btn open" id="btn-de-b" aria-expanded="true">▼</button>
+      </div>
+      <div class="cb" id="de-b">
+        <div class="panel">
+          <p>The Council of Earth Systems presents you with real dilemmas — the kind that governments, corporations, and communities face today. Each choice carries consequences for your <strong style="color:var(--accent)">Humility Score</strong> and for <strong style="color:var(--accent2)">Planetary Stability</strong>. There are no perfect answers; only more or less systems-aware ones. Your decisions are remembered.</p>
+          <div id="sc-container"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── SECTION 6: PLAYER ROLES ──────────────────────────────── -->
+  <section id="roles" class="ps" data-s="roles">
+    <div class="pbg pbg-2"></div>
+    <div class="si">
+      <div class="sh" onclick="toggleS('ro-b')">
+        <span class="s-ico">🎭</span>
+        <h2>6. Your Role in the Council</h2>
+        <button class="coll-btn open" id="btn-ro-b" aria-expanded="true">▼</button>
+      </div>
+      <div class="cb" id="ro-b">
+        <div class="panel">
+          <p>Your role determines your primary lens for engaging with planetary systems. Each role asks different questions, prioritises different evidence, and wields different influence. Click a role card to select it. You can change roles at any time — your score travels with you, not your title.</p>
+          <div class="grid" id="role-cards"></div>
+          <div class="pol pol-box">
+            <h4>🏛️ Policy Lens</h4>
+            <p>In institutional contexts, these roles map to real functions: Ecosystem Cartographers → environmental impact assessors; Systems Architects → infrastructure and resilience planners; Planetary Historians → long-range risk analysts using civilisational collapse data; Biosphere Guardians → conservation law practitioners and land managers.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── SECTION 7: MILESTONES ────────────────────────────────── -->
+  <section id="milestones" class="ps" data-s="milestones">
+    <div class="pbg pbg-3"></div>
+    <div class="si">
+      <div class="sh" onclick="toggleS('ms-b')">
+        <span class="s-ico">🏆</span>
+        <h2>7. Council Milestones</h2>
+        <button class="coll-btn open" id="btn-ms-b" aria-expanded="true">▼</button>
+      </div>
+      <div class="cb" id="ms-b">
+        <div class="panel">
+          <p>These are not badges of superiority — they are acknowledgements of perspective shift. The Council values progress, not perfection. Milestones are automatically unlocked as your journey unfolds and are persisted locally to your device.</p>
+          <div class="mstones" id="ms-list"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── SECTION 8: JOURNEY GENERATOR ────────────────────────── -->
+  <section id="journey" class="ps" data-s="journey">
+    <div class="pbg pbg-4"></div>
+    <div class="si">
+      <div class="sh" onclick="toggleS('jo-b')">
+        <span class="s-ico">🚀</span>
+        <h2>8. Begin Your Journey</h2>
+        <button class="coll-btn open" id="btn-jo-b" aria-expanded="true">▼</button>
+      </div>
+      <div class="cb" id="jo-b">
+        <div class="panel">
+          <p>Personalise your path through the framework. Your choices are stored locally on your device and never transmitted anywhere. You can reset everything at any time.</p>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:6px">
+            <div class="fg"><label for="nm-in">Your Name or Alias</label><input type="text" id="nm-in" placeholder="Explorer" maxlength="40" autocomplete="off"></div>
+            <div class="fg"><label for="int-in">Primary Focus</label>
+              <select id="int-in">
+                <option>Ecology</option><option>Philosophy</option>
+                <option>Systems Design</option><option>Climate Science</option>
+                <option>Indigenous Knowledge</option><option>Policy &amp; Governance</option>
+                <option>Education</option>
+              </select>
+            </div>
+            <div class="fg"><label for="rol-in">Role Preference</label>
+              <select id="rol-in">
+                <option>Ecosystem Cartographer</option><option>Systems Architect</option>
+                <option>Planetary Historian</option><option>Biosphere Guardian</option>
+              </select>
+            </div>
+          </div>
+          <div style="display:flex;gap:9px;flex-wrap:wrap">
+            <button class="btn bp" onclick="genStory()" data-tip="Generates a narrative based on your role and focus">✦ Generate My Journey</button>
+            <button class="btn bs" onclick="savePref()" data-tip="Saves preferences to IndexedDB">💾 Save</button>
+            <button class="btn bd" onclick="resetAll()" data-tip="Clears all local state — irreversible">🗑️ Reset All</button>
+          </div>
+          <div id="story-out" class="story-out" role="region" aria-live="polite"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- FOOTER -->
+<footer>
+  <div class="zh-box">
+    <strong>⚡ Zero-Harm &amp; Anti-Inversion Commitment</strong><br>
+    This tool is designed to empower, never to coerce. It ranks no one, shames no one, and excludes no one. No data leaves your device. All state is local-only, optional, and user-resettable. Input is sanitised. Rate limits exist to prevent abuse — not to restrict learning. If you adapt or redistribute this framework, preserve these commitments.
+  </div>
+  <p style="margin-bottom:18px">The Cosmic Humility Engine · Planetary Systems Learning Framework · v2.0</p>
+  <div class="attr-grid">
+    <div class="attr-item"><h5>Scientific Foundations</h5><p>Suzanne Simard (mycorrhizal networks), James Lovelock (Gaia hypothesis), E.O. Wilson (biophilia), Donella Meadows (systems thinking), Physarum polycephalum research (Toshiyuki Nakagaki et al.).</p></div>
+    <div class="attr-item"><h5>Philosophical Roots</h5><p>Deep ecology (Arne Næss), Land ethics (Aldo Leopold), Indigenous ecological knowledge traditions worldwide, Earth jurisprudence (Cormac Cullinan).</p></div>
+    <div class="attr-item"><h5>Licensing</h5><p>Content: Creative Commons CC BY-SA 4.0. Code: MIT License. No external dependencies. No external fonts. System font stack only.</p></div>
+    <div class="attr-item"><h5>Technical Notes</h5><p>Fully offline-capable via IndexedDB with localStorage fallback. Zero external requests. No cookies. No telemetry. Runs in any modern browser without a server.</p></div>
+  </div>
+  <p style="font-size:.72rem;margin-top:18px;color:#3a5060">Offline-first · IndexedDB state · Zero telemetry · Print-ready · Input-sanitised · Rate-limited</p>
+</footer>
+
+<script>
+/* ================================================================
+   UTILITY: Input Sanitisation
+   Prevents XSS by escaping all HTML-special characters.
+   Always call sanitize() before injecting any user string into DOM.
+   ================================================================ */
+function sanitize(s){
+  if(typeof s!=='string')return '';
+  return s
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+    .replace(/'/g,'&#x27;').slice(0,250);
+}
+
+/* ================================================================
+   UTILITY: Rate Limiter
+   Returns false (silently) if the same key is called within `ms`.
+   Prevents rapid-fire form submissions and search spam.
+   ================================================================ */
+const _rl={};
+function rateLimit(k,ms=700){
+  const n=Date.now();
+  if(_rl[k]&&n-_rl[k]<ms)return false;
+  _rl[k]=n;return true;
+}
+
+/* ================================================================
+   IndexedDB MANAGER
+   Persists STATE across sessions. Falls back to localStorage
+   if IDB is unavailable (e.g., some private-browsing contexts).
+   Usage: await DB.set('key', value) / await DB.get('key')
+   ================================================================ */
+const DB=(()=>{
+  const NAME='CosmicHumilityEngine2',STORE='state';
+  let _db=null;
+  async function open(){
+    if(_db)return _db;
+    return new Promise((res,rej)=>{
+      const r=indexedDB.open(NAME,1);
+      r.onupgradeneeded=e=>e.target.result.createObjectStore(STORE);
+      r.onsuccess=e=>{_db=e.target.result;res(_db)};
+      r.onerror=()=>rej(r.error);
+    });
+  }
+  async function set(k,v){
+    try{
+      const db=await open();
+      return new Promise((res,rej)=>{
+        const tx=db.transaction(STORE,'readwrite');
+        tx.objectStore(STORE).put(JSON.stringify(v),k);
+        tx.oncomplete=res;tx.onerror=rej;
+      });
+    }catch{try{localStorage.setItem('che_'+k,JSON.stringify(v))}catch{}}
+  }
+  async function get(k){
+    try{
+      const db=await open();
+      return new Promise((res,rej)=>{
+        const tx=db.transaction(STORE,'readonly');
+        const r=tx.objectStore(STORE).get(k);
+        r.onsuccess=()=>{try{res(r.result?JSON.parse(r.result):null)}catch{res(null)}};
+        r.onerror=rej;
+      });
+    }catch{
+      try{const r=localStorage.getItem('che_'+k);return r?JSON.parse(r):null}catch{return null}
+    }
+  }
+  return{set,get};
+})();
+
+/* ================================================================
+   STATE — single source of truth
+   All mutable values live here. Persisted to IDB after each change.
+   Extend: add fields here then render them in updateHUD().
+   ================================================================ */
+const S={
+  name:'Explorer',role:'Unassigned',interest:'Ecology',
+  humility:0,stability:70,
+  decisions:0,
+  visited:new Set(),
+  done:{},           // completed scenario ids → chosen index
+  policy:false,
+  ready:false,       // true after IDB load completes
+};
+
+async function loadState(){
+  const saved=await DB.get('gs');
+  if(saved){
+    Object.assign(S,saved);
+    S.visited=new Set(saved.visited||[]);
+    S.done=saved.done||{};
+  }
+  S.ready=true;
+  updateHUD();renderScenarios();renderMilestones();loadToForm();
+}
+
+async function saveState(){
+  await DB.set('gs',{...S,visited:[...S.visited]});
+}
+
+/* ================================================================
+   HUD RENDERER
+   Refreshes every visible meter and counter to match current S.
+   Called after every state mutation.
+   ================================================================ */
+function updateHUD(){
+  $('hud-name').textContent=sanitize(S.name);
+  $('hud-role').textContent=sanitize(S.role);
+  $('h-val').textContent=S.humility+'%';
+  $('s-val').textContent=S.stability+'%';
+  const prog=calcProgress();
+  $('p-val').textContent=prog+'%';
+  $('h-bar').style.width=S.humility+'%';
+  $('s-bar').style.width=S.stability+'%';
+  $('p-bar').style.width=prog+'%';
+  $('h-dec').textContent=S.decisions;
+  $('h-ms').textContent=countMilestones();
+  drawConst();checkMilestones();
+}
+function calcProgress(){
+  const sv=S.visited.size,sc=Object.keys(S.done).length;
+  return Math.min(100,Math.round(sv/8*50+sc/SCENARIOS.length*30+S.humility/100*20));
+}
+function $(id){return document.getElementById(id)}
+
+/* ================================================================
+   HUD TOGGLE
+   ================================================================ */
+function toggleHUD(){
+  const h=$('hud'),c=h.classList.toggle('hidden');
+  $('hud-tgl').textContent=c?'▶':'◀';
+}
+
+/* ================================================================
+   SPLASH SCREEN
+   Star-field drawn on canvas; progress bar drives timing (~3s).
+   Calls loadState() once dismissed to restore persisted session.
+   ================================================================ */
+let splashDone=false;
+function initSplash(){
+  const cv=$('splash-canvas'),ctx=cv.getContext('2d');
+  function resize(){cv.width=window.innerWidth;cv.height=window.innerHeight}
+  resize();window.addEventListener('resize',resize);
+  const STARS=Array.from({length:200},()=>({
+    x:Math.random(),y:Math.random(),
+    r:Math.random()*1.5+.3,
+    a:Math.random(),ph:Math.random()*Math.PI*2,
+    sp:Math.random()*.0003+.00008,
+  }));
+  let f=0;
+  function draw(){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    const t=f/60;
+    STARS.forEach(s=>{
+      const alpha=.25+.55*Math.sin(s.ph+t*s.sp*180);
+      ctx.beginPath();
+      ctx.arc(s.x*cv.width,s.y*cv.height,s.r,0,Math.PI*2);
+      ctx.fillStyle=`rgba(160,200,255,${alpha})`;
+      ctx.fill();
+    });
+    f++;
+    if(!splashDone)requestAnimationFrame(draw);
+  }
+  draw();
+  setTimeout(()=>{
+    document.querySelector('.sp-title').classList.add('on');
+    document.querySelector('.sp-sub').classList.add('on');
+  },200);
+  let prog=0;const bar=$('sp-bar');
+  const iv=setInterval(()=>{
+    prog+=1.8;bar.style.width=prog+'%';
+    if(prog>=100){clearInterval(iv);setTimeout(endSplash,350)}
+  },30);
+}
+function endSplash(){
+  splashDone=true;
+  $('splash').classList.add('out');
+  loadState();
+}
+
+/* ================================================================
+   SCROLL SPY
+   Highlights active nav link; records section visits in S.visited.
+   Extend: any <section data-s="..."> will be tracked automatically.
+   ================================================================ */
+function initScrollSpy(){
+  const secs=document.querySelectorAll('section[data-s]');
+  const links=document.querySelectorAll('.nav-links a');
+  const obs=new IntersectionObserver(entries=>{
+    entries.forEach(e=>{
+      if(!e.isIntersecting)return;
+      const id=e.target.id;
+      links.forEach(l=>l.classList.toggle('active',l.getAttribute('href')==='#'+id));
+      if(S.ready&&!S.visited.has(id)){
+        S.visited.add(id);saveState();updateHUD();
+      }
+    });
+  },{threshold:.2});
+  secs.forEach(s=>obs.observe(s));
+}
+
+/* ================================================================
+   COLLAPSIBLE SECTIONS
+   Any body with id="X" can be toggled via toggleS('X').
+   The matching button must have id="btn-X".
+   ================================================================ */
+function toggleS(id){
+  const b=$(id),btn=$('btn-'+id);
+  if(!b)return;
+  const col=b.classList.toggle('collapsed');
+  if(btn){btn.classList.toggle('open',!col);btn.setAttribute('aria-expanded',String(!col))}
+}
+
+/* ================================================================
+   CLIENT-SIDE SEARCH
+   Indexes all paragraph, list-item, heading text on first open.
+   Marks query term in results. Rate-limited to 120ms intervals.
+   ================================================================ */
+const IDX=[];
+function buildIdx(){
+  if(IDX.length)return;
+  document.querySelectorAll('section').forEach(sec=>{
+    const title=sec.querySelector('h2')?.textContent||'';
+    sec.querySelectorAll('p,li,h3,h4').forEach(el=>{
+      const t=el.textContent.trim();
+      if(t.length>20)IDX.push({sec:title,text:t,id:sec.id});
+    });
+  });
+}
+function openSearch(){
+  buildIdx();$('srch').classList.add('on');
+  $('srch-in').focus();$('srch-res').innerHTML='';
+}
+function closeSearch(){$('srch').classList.remove('on');$('srch-in').value=''}
+document.addEventListener('keydown',e=>{
+  if((e.ctrlKey||e.metaKey)&&e.key==='k'){e.preventDefault();openSearch()}
+  if(e.key==='Escape')closeSearch();
+});
+$('srch').addEventListener('click',e=>{if(e.target===e.currentTarget)closeSearch()});
+$('srch-in').addEventListener('input',function(){
+  if(!rateLimit('search',120))return;
+  const q=sanitize(this.value).toLowerCase().trim();
+  const c=$('srch-res');
+  if(!q){c.innerHTML='';return}
+  const res=IDX.filter(i=>i.text.toLowerCase().includes(q)).slice(0,10);
+  if(!res.length){c.innerHTML=`<p style="color:var(--muted);padding:12px">No results for "<em>${sanitize(this.value)}</em>"</p>`;return}
+  c.innerHTML=res.map(r=>{
+    const re=new RegExp('('+q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi');
+    const hi=(r.text.replace(re,'<mark>$1</mark>')).slice(0,155)+'…';
+    return `<div class="sr" role="listitem" onclick="jumpTo('${r.id}')"><h4>${sanitize(r.sec)}</h4><p>${hi}</p></div>`;
+  }).join('');
+});
+function jumpTo(id){
+  closeSearch();
+  const el=$(id);if(!el)return;
+  el.scrollIntoView({behavior:'smooth',block:'start'});
+  const cb=el.querySelector('.cb');
+  if(cb&&cb.classList.contains('collapsed')){
+    const bid=cb.id;if(bid)toggleS(bid);
+  }
+}
+
+/* ================================================================
+   POLICY/EXPLORER MODE TOGGLE
+   Toggles .pm on <body> which drives .pol / .exp visibility.
+   ================================================================ */
+function toggleMode(){
+  S.policy=!S.policy;
+  document.body.classList.toggle('pm',S.policy);
+  const btn=$('mode-btn');
+  btn.textContent=S.policy?'🏛️ Policy Lens':'🎓 Explorer';
+  btn.classList.toggle('lit',S.policy);
+  toast(S.policy?'🏛️ Policy Lens — governance context enabled':'🎓 Explorer mode');
+  saveState();
+}
+
+/* ================================================================
+   SCENARIO DATA
+   Each scenario has an id, tag, title, description, and 3 choices.
+   Each choice carries a humility delta, stability delta, and pills.
+   Add new scenarios here — renderScenarios() handles the DOM.
+   ================================================================ */
+const SCENARIOS=[
+  {id:'fire',tag:'Forest Systems',title:'The Ancient Forest Fire',
+   desc:"A wildfire approaches a 400-year-old boreal forest. You have resources to respond in one of three ways. Fire has been part of this ecosystem for millennia — long before industrial fuel-load changes altered its character.",
+   choices:[
+    {text:'🏗️ Build firebreaks immediately, prioritising the human settlement above all else.',
+     result:'The settlement is protected. The ancient forest burns extensively. Without it, the regional water table drops and downstream communities face drought within five years.',
+     h:+5,st:-8,pills:[['+5 Humility','pp'],['−8 Stability','pn'],['Short-term safety, long-term cost','pu']]},
+    {text:'🌿 Evacuate communities and allow the natural fire cycle to proceed under monitoring.',
+     result:'The controlled burn renews the forest. Fire-adapted species regenerate. Biodiversity increases over the following decade. Communities return safely.',
+     h:+12,st:+6,pills:[['+12 Humility','pp'],['+6 Stability','pp'],['Ecosystem process trusted','pu']]},
+    {text:'🪶 Engage Indigenous fire practitioners to apply traditional cultural burning — centuries of local knowledge.',
+     result:'Mosaic burning creates natural firebreaks protecting both settlement and forest. Indigenous ecological knowledge outperforms both prior options.',
+     h:+18,st:+10,pills:[['+18 Humility','pp'],['+10 Stability','pp'],['Knowledge integration maximised','pu']]}
+   ]},
+  {id:'bloom',tag:'Ocean Systems',title:'The Coastal Algae Bloom',
+   desc:"A massive algae bloom is suffocating a coastal fishery. The bloom is caused by nutrient runoff from upstream industrial agriculture — a systemic problem, not a local one. Fishing families are facing immediate financial collapse.",
+   choices:[
+    {text:'☠️ Apply chemical dispersants immediately to clear the bloom and restore fishing within weeks.',
+     result:'The bloom clears. The dispersants also kill most marine life in the area. Fish populations collapse. The fishing community is worse off within a year.',
+     h:-5,st:-12,pills:[['−5 Humility','pn'],['−12 Stability','pn'],['Symptom treated, cause ignored','pu']]},
+    {text:'🌾 Support affected fishers temporarily while pressuring upstream operators to reduce nutrient runoff.',
+     result:'The bloom persists for two seasons. Nutrient levels gradually drop. The fishery recovers fully in four years, now protected from future blooms.',
+     h:+10,st:+8,pills:[['+10 Humility','pp'],['+8 Stability','pp'],['Root cause addressed','pu']]},
+    {text:'🔬 Commission a systems study to map the full nutrient pathway before taking action.',
+     result:'The study reveals three additional contributing sources. A comprehensive watershed plan prevents similar crises in four connected coastal zones.',
+     h:+15,st:+12,pills:[['+15 Humility','pp'],['+12 Stability','pp'],['Systems understanding rewarded','pu']]}
+   ]},
+  {id:'mine',tag:'Geological Systems',title:'The Rare Earth Discovery',
+   desc:"A large lithium deposit is found beneath a functioning wetland that filters water for 200,000 people and supports 47 threatened bird species. The lithium is needed for EV batteries to meet national climate targets.",
+   choices:[
+    {text:'⛏️ Begin extraction immediately — climate targets are urgent and outweigh local ecological cost.',
+     result:'Extraction begins. The wetland is drained. Water quality degrades. Legal challenges delay the mine for three years anyway. The birds are not seen again.',
+     h:-8,st:-15,pills:[['−8 Humility','pn'],['−15 Stability','pn'],['Trade-off poorly evaluated','pu']]},
+    {text:'🗺️ Conduct a full ecological and hydrological impact assessment before any extraction decision.',
+     result:'Assessment reveals a partial route preserving 80% of the wetland. A smaller lithium yield is achieved with significantly reduced ecological impact.',
+     h:+8,st:+5,pills:[['+8 Humility','pp'],['+5 Stability','pp'],['Precautionary principle applied','pu']]},
+    {text:'♻️ Invest equivalent capital in lithium recycling infrastructure and urban mining of existing batteries.',
+     result:'Urban mining yields 60% of the lithium needed with zero new land disturbance. The wetland remains. A model for circular materials policy is established.',
+     h:+20,st:+15,pills:[['+20 Humility','pp'],['+15 Stability','pp'],['Systemic innovation rewarded','pu']]}
+   ]},
+  {id:'soil',tag:'Soil Systems',title:'The Failing Agricultural Region',
+   desc:"An agricultural region has seen a 30% crop yield decline over twenty years due to soil microbiome degradation from synthetic inputs. Farms face bankruptcy. Short-term food production needs are real and cannot be dismissed.",
+   choices:[
+    {text:'💊 Increase synthetic inputs to stabilise yields and prevent immediate economic collapse in the farming community.',
+     result:'Yields stabilise for three years. Soil biology continues to degrade. By year five, yields are 50% below the original baseline. The region is eventually abandoned.',
+     h:-10,st:-18,pills:[['−10 Humility','pn'],['−18 Stability','pn'],['Long-term collapse accelerated','pu']]},
+    {text:'🌱 Begin a five-year regenerative transition with government income support during the soil recovery period.',
+     result:'Three years of lower yields are followed by steadily increasing productivity. By year eight, the microbiome is partially restored and yields exceed historical averages.',
+     h:+12,st:+14,pills:[['+12 Humility','pp'],['+14 Stability','pp'],['Recovery investment rewarded','pu']]},
+    {text:'🤝 Partner with soil ecologists and Indigenous land managers to co-design a region-specific regenerative framework.',
+     result:'A landscape-specific approach accelerates recovery. Farmer knowledge informs scientific models. The region becomes a national demonstration site for soil restoration.',
+     h:+22,st:+18,pills:[['+22 Humility','pp'],['+18 Stability','pp'],['Co-production of knowledge rewarded','pu']]}
+   ]}
+];
+
+/* ================================================================
+   SCENARIO RENDERER
+   Builds DOM from SCENARIOS array. Completed scenarios are locked
+   and display the outcome text and impact pills.
+   ================================================================ */
+function renderScenarios(){
+  const c=$('sc-container');if(!c)return;
+  c.innerHTML=SCENARIOS.map(s=>{
+    const done=S.done[s.id];
+    const isDone=done!==undefined;
+    return `<div class="sc-card${isDone?' done':''}" id="sc-${s.id}">
+      <div class="sc-tag">${sanitize(s.tag)}</div>
+      <div class="sc-title">${sanitize(s.title)}</div>
+      <div class="sc-desc">${sanitize(s.desc)}</div>
+      ${s.choices.map((ch,i)=>`
+        <button class="ch-btn${isDone&&done===i?' chosen':''}"
+          ${isDone?'disabled':''}
+          onclick="applyDecision('${s.id}',${i})">
+          ${sanitize(ch.text)}
+        </button>`).join('')}
+      <div class="sc-result${isDone?' on':''}" id="res-${s.id}">
+        ${isDone?`<div>${sanitize(s.choices[done].result)}</div>
+          <div class="pills">${s.choices[done].pills.map(p=>`<span class="pill ${Array.isArray(p)?p[1]:'pu'}">${sanitize(Array.isArray(p)?p[0]:p)}</span>`).join('')}</div>`:''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ================================================================
+   APPLY DECISION
+   Clamps humility and stability to [0,100].
+   Persists, re-renders, and updates HUD.
+   ================================================================ */
+function applyDecision(id,idx){
+  if(!rateLimit('dec',500))return;
+  if(S.done[id]!==undefined)return;
+  const sc=SCENARIOS.find(s=>s.id===id);if(!sc)return;
+  const ch=sc.choices[idx];
+  S.humility=Math.max(0,Math.min(100,S.humility+ch.h));
+  S.stability=Math.max(0,Math.min(100,S.stability+ch.st));
+  S.decisions++;
+  S.done[id]=idx;
+  saveState();updateHUD();renderScenarios();
+  toast(`Council recorded: ${ch.h>=0?'+':''}${ch.h} Humility  ${ch.st>=0?'+':''}${ch.st} Stability`);
+}
+
+/* ================================================================
+   ROLE CARDS
+   Clicking a card sets S.role and updates the HUD and form.
+   ================================================================ */
+const ROLES=[
+  {ico:'🗺️',name:'Ecosystem Cartographer',
+   desc:'Maps invisible connections — species interactions, energy flows, nutrient cycles. Questions: What connects what? Where is the network?',
+   pol:'Environmental Impact Assessor'},
+  {ico:'⚙️',name:'Systems Architect',
+   desc:'Designs human infrastructure that works with natural systems rather than against them. Questions: How do we build without breaking?',
+   pol:'Infrastructure & Resilience Planner'},
+  {ico:'📜',name:'Planetary Historian',
+   desc:'Studies civilisational rise and collapse through ecological lenses. Questions: What patterns repeat? What did lost civilisations fail to see?',
+   pol:'Long-Range Risk Analyst'},
+  {ico:'🛡️',name:'Biosphere Guardian',
+   desc:'Advocates for the protection of vulnerable ecosystems and voiceless species. Questions: Who speaks for what cannot speak? Where is the line?',
+   pol:'Conservation Law Practitioner'},
+];
+function renderRoles(){
+  const c=$('role-cards');if(!c)return;
+  c.innerHTML=ROLES.map(r=>`
+    <div class="card" style="cursor:pointer" role="button" tabindex="0"
+      data-tip="${sanitize(r.desc)}"
+      onclick="selectRole('${sanitize(r.name)}')"
+      onkeydown="if(event.key==='Enter')selectRole('${sanitize(r.name)}')">
+      <div class="ico">${r.ico}</div>
+      <h4>${sanitize(r.name)}</h4>
+      <p class="exp">${sanitize(r.desc)}</p>
+      <p class="pol" style="font-size:.8rem"><em>Policy equivalent:</em> ${sanitize(r.pol)}</p>
+    </div>`).join('');
+}
+function selectRole(n){
+  S.role=n;
+  $('rol-in').value=n;
+  updateHUD();saveState();
+  toast(`Role selected: ${n}`);
+}
+
+/* ================================================================
+   MILESTONES
+   Each milestone has a check(S) function.
+   checkMilestones() is called from updateHUD() after every change.
+   Add new milestones to MILES — no other code needs changing.
+   ================================================================ */
+const MILES=[
+  {id:'m1',ico:'🌱',title:'First Footstep',desc:'You began the journey.',
+   check:s=>s.visited.size>=1},
+  {id:'m2',ico:'🧭',title:'Wayfinder',desc:'You have visited four or more sections.',
+   check:s=>s.visited.size>=4},
+  {id:'m3',ico:'⚖️',title:'Council Initiate',desc:'You made your first Council decision.',
+   check:s=>s.decisions>=1},
+  {id:'m4',ico:'🌊',title:'Systems Thinker',desc:'You completed three Council scenarios.',
+   check:s=>s.decisions>=3},
+  {id:'m5',ico:'🌍',title:'Planetary Citizen',desc:'You completed all Council scenarios.',
+   check:s=>s.decisions>=SCENARIOS.length},
+  {id:'m6',ico:'🌿',title:'Humble Beginnings',desc:'Humility score reached 25.',
+   check:s=>s.humility>=25},
+  {id:'m7',ico:'🔭',title:'Planetary Perspective',desc:'Humility score reached 60.',
+   check:s=>s.humility>=60},
+  {id:'m8',ico:'💎',title:'Stability Steward',desc:'Planetary Stability maintained above 80.',
+   check:s=>s.stability>=80},
+  {id:'m9',ico:'✨',title:'Council Member',desc:'You explored all eight sections.',
+   check:s=>s.visited.size>=8},
+];
+function renderMilestones(){
+  const c=$('ms-list');if(!c)return;
+  c.innerHTML=MILES.map(m=>`
+    <div class="ms${m.check(S)?' on':''}" id="${m.id}">
+      <div class="mi">${m.ico}</div>
+      <div><h4>${sanitize(m.title)}</h4><p>${sanitize(m.desc)}</p></div>
+    </div>`).join('');
+}
+function checkMilestones(){
+  let news=0;
+  MILES.forEach(m=>{
+    const el=$(m.id);if(!el)return;
+    const now=m.check(S),was=el.classList.contains('on');
+    el.classList.toggle('on',now);
+    if(now&&!was&&S.ready){
+      news++;setTimeout(()=>toast(`🏆 Milestone: ${m.title}`),news*650);
+    }
+  });
+  $('h-ms').textContent=countMilestones();
+}
+function countMilestones(){return MILES.filter(m=>m.check(S)).length}
+
+/* ================================================================
+   STORY GENERATOR
+   Produces a personalised narrative from S.name, S.role, S.interest.
+   Templates are keyed by [role][interest] with a 'default' fallback.
+   ================================================================ */
+const STORIES={
+  'Ecosystem Cartographer':{
+    'Ecology':"Your maps will become the language of survival. Where others see empty land, you trace invisible threads — fungal highways, bird corridors, migration pulses. The Council has been waiting for someone who can translate the world's silence into patterns the rest of us can finally read.",
+    'Climate Science':"Climate is not a number in a report. It is a living conversation between ocean, sky, and soil. You will chart the nodes where these conversations grow heated or fall quiet. The Council needs cartographers who understand that a broken feedback loop is not a statistic — it is a wound.",
+    'default':"Every ecosystem is a text written in a language older than human speech. Your role is translation — making visible the communication that industrial civilisation has learned to ignore. The Council awaits your first map.",
+  },
+  'Systems Architect':{
+    'Systems Design':"The finest human structures are those indistinguishable from the ecosystems they inhabit. Your challenge is not to impose form but to discover the form already emerging in the land, the water, the soil beneath your foundations. Build as a guest.",
+    'Policy & Governance':"Policy is infrastructure for human behaviour. Like any infrastructure, it either works with or against the systems it spans. Your task is to design governance that aligns incentive with ecological reality — not in spite of complexity, but because of it.",
+    'default':"Before you lay a single foundation, the Council asks: what system am I entering, and how will my presence change it? This question, asked at scale, is civilisation design. You have been summoned to think at that scale.",
+  },
+  'Planetary Historian':{
+    'Philosophy':"Every civilisation collapse is a philosophy failure before it is an agricultural one. Societies do not destroy their ecosystems in ignorance — they do it through the wrong ideas about what they are. Your task is to find those ideas before they harden into the policy of our time.",
+    'default':"The archive of collapsed civilisations is the most important dataset humanity possesses — and the least consulted. Read it carefully, not with grief for what was lost, but with urgency for what can still be changed. History is not the past. It is a warning still arriving.",
+  },
+  'Biosphere Guardian':{
+    'Ecology':"Someone must stand at the border between the extractive and the irreplaceable. That border moves every year, always in one direction. Your work is not romantic — it is the most practical thing a human being can do: preserve the systems without which nothing else is possible.",
+    'default':"The voiceless do not need poetry. They need jurisdiction, enforceable rights, and people willing to become inconveniently visible on their behalf. You are that person. The Council recognises this as the most difficult role — and the most necessary.",
+  },
+};
+function genStory(){
+  if(!rateLimit('story',1200))return;
+  const name=sanitize($('nm-in').value)||'Explorer';
+  const role=$('rol-in').value;
+  const interest=$('int-in').value;
+  S.name=name;S.role=role;S.interest=interest;
+  const tmpl=STORIES[role]||{};
+  const core=tmpl[interest]||tmpl['default']||"The Council of Earth Systems has summoned you. Your path begins now.";
+  const status=S.humility>0
+    ?`\n\nYour current Humility Score is ${S.humility}. The Council notes your decisions and considers you ${S.humility>=50?'a promising participant':'still finding your footing'}.`:'';
+  const full=`${name}, you have been summoned to the Council of Earth Systems.\n\nYou arrive as a ${role}, drawn by your focus on ${interest}.\n\n${core}${status}\n\nThe first question the Council will ask is the same it has asked every new arrival:\n\n"Can humanity learn to exist as a participant — rather than a ruler?"\n\nYour journey begins now.`;
+  const out=$('story-out');
+  out.textContent=full;out.classList.add('on');
+  out.style.display='block';
+  updateHUD();saveState();toast(`Journey generated for ${name}`);
+}
+
+/* ================================================================
+   PREFERENCES — save / load form ↔ state
+   ================================================================ */
+function savePref(){
+  S.name=sanitize($('nm-in').value)||'Explorer';
+  S.role=$('rol-in').value;S.interest=$('int-in').value;
+  updateHUD();saveState();toast('Preferences saved ✓');
+}
+function loadToForm(){
+  if(S.name!=='Explorer')$('nm-in').value=S.name;
+  $('rol-in').value=S.role!=='Unassigned'?S.role:'Ecosystem Cartographer';
+  $('int-in').value=S.interest||'Ecology';
+  if(S.policy){document.body.classList.add('pm');$('mode-btn').textContent='🏛️ Policy Lens';$('mode-btn').classList.add('lit')}
+}
+function resetAll(){
+  if(!confirm('Reset all progress and preferences? This cannot be undone.'))return;
+  DB.set('gs',null).then(()=>{try{localStorage.clear()}catch{}location.reload()});
+}
+
+/* ================================================================
+   TOAST NOTIFICATION
+   Non-blocking feedback overlay. Vanishes after 3 s.
+   ================================================================ */
+function toast(msg){
+  const c=$('toasts');
+  const el=document.createElement('div');
+  el.className='toast';el.textContent=sanitize(msg);
+  c.appendChild(el);setTimeout(()=>el.remove(),3200);
+}
+
+/* ================================================================
+   CONSTELLATION VISUALIZER
+   Draws 6 nodes (5 Earth systems + Humanity) on a small canvas.
+   Humanity's node moves from centre (anthropocentric default)
+   toward the periphery as S.humility climbs toward 100.
+   Connection line opacity is proportional to S.stability.
+   Node sizes pulse gently over time via requestAnimationFrame.
+   ================================================================ */
+const CNODES=[
+  {id:'forest',lbl:'Forest',col:'#4dddaa',ang:0,  r:.38},
+  {id:'ocean', lbl:'Ocean', col:'#5ea8ff',ang:72, r:.40},
+  {id:'air',   lbl:'Air',   col:'#aaccff',ang:144,r:.36},
+  {id:'earth', lbl:'Earth', col:'#e8c87a',ang:216,r:.38},
+  {id:'life',  lbl:'Life',  col:'#a0e060',ang:288,r:.37},
+];
+let _cft=0;
+function drawConst(){
+  const cv=$('cst-canvas');if(!cv)return;
+  const ctx=cv.getContext('2d');
+  const W=cv.width,H=cv.height,cx=W/2,cy=H/2;
+  ctx.clearRect(0,0,W,H);
+  // Background micro-stars (deterministic, lightweight)
+  for(let i=0;i<55;i++){
+    const x=(Math.sin(i*2.41)*0.5+0.5)*W,y=(Math.cos(i*1.83)*0.5+0.5)*H;
+    ctx.beginPath();ctx.arc(x,y,.55,0,Math.PI*2);
+    ctx.fillStyle='rgba(160,190,255,.28)';ctx.fill();
+  }
+  const t=_cft/60;
+  const hT=S.humility/100;
+  const huNode={id:'human',lbl:'Us',col:'#f0a84a',ang:330,r:hT*.38};
+  const allNodes=[...CNODES,huNode];
+  const pts=allNodes.map(n=>{
+    const pulse=1+.06*Math.sin(t*1.4+n.ang*.05);
+    return{
+      ...n,
+      x:cx+Math.cos(n.ang*Math.PI/180)*n.r*W*pulse,
+      y:cy+Math.sin(n.ang*Math.PI/180)*n.r*H*pulse,
+    };
+  });
+  // Connections
+  const op=Math.max(.06,S.stability/100*.55);
+  for(let i=0;i<pts.length;i++)for(let j=i+1;j<pts.length;j++){
+    ctx.beginPath();ctx.moveTo(pts[i].x,pts[i].y);ctx.lineTo(pts[j].x,pts[j].y);
+    ctx.strokeStyle=`rgba(77,221,170,${op})`;ctx.lineWidth=.6;ctx.stroke();
+  }
+  // Nodes
+  pts.forEach(n=>{
+    const isH=n.id==='human';
+    const sz=isH?(4+(1-hT)*5):(3.2+.4*Math.sin(t+n.ang*.08));
+    // Glow
+    const g=ctx.createRadialGradient(n.x,n.y,0,n.x,n.y,sz*4);
+    g.addColorStop(0,n.col+'99');g.addColorStop(1,n.col+'00');
+    ctx.beginPath();ctx.arc(n.x,n.y,sz*4,0,Math.PI*2);
+    ctx.fillStyle=g;ctx.fill();
+    // Core
+    ctx.beginPath();ctx.arc(n.x,n.y,sz,0,Math.PI*2);
+    ctx.fillStyle=n.col;ctx.fill();
+    // Label
+    ctx.fillStyle='rgba(220,232,240,.72)';
+    ctx.font=`${Math.round(W*.057)}px system-ui`;
+    ctx.textAlign='center';
+    ctx.fillText(n.lbl,n.x,n.y-sz-3);
+  });
+}
+function tickConst(){
+  _cft++;if(_cft%2===0)drawConst();
+  requestAnimationFrame(tickConst);
+}
+
+/* ================================================================
+   INITIALISATION — runs once the DOM is fully parsed
+   ================================================================ */
+document.addEventListener('DOMContentLoaded',()=>{
+  initSplash();
+  initScrollSpy();
+  renderRoles();
+  renderScenarios();
+  renderMilestones();
+  tickConst();
+});
+</script>
+</body>
+</html>
